@@ -1,0 +1,438 @@
+<!--<!DOCTYPE html>-->
+<!--<html>-->
+<!--<head>-->
+<!--    <title>GSR情绪实时监测</title>-->
+<!--    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>-->
+<!--    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.min.js"></script>-->
+<!--    <style>-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            margin: 20px;-->
+<!--            background: #f0f2f5;-->
+<!--        }-->
+<!--        h1 {-->
+<!--            color: #1a73e8;-->
+<!--            text-align: center;-->
+<!--            margin-bottom: 30px;-->
+<!--        }-->
+<!--        .dashboard {-->
+<!--            display: flex;-->
+<!--            flex-direction: column;-->
+<!--            gap: 30px;-->
+<!--        }-->
+<!--        #gsrChart {-->
+<!--            height: 60vh;-->
+<!--            min-height: 400px;-->
+<!--            background: white;-->
+<!--            border-radius: 12px;-->
+<!--            box-shadow: 0 4px 6px rgba(0,0,0,0.1);-->
+<!--            padding: 20px;-->
+<!--        }-->
+<!--        .emotion-panel {-->
+<!--            background: white;-->
+<!--            border-radius: 12px;-->
+<!--            box-shadow: 0 4px 6px rgba(0,0,0,0.1);-->
+<!--            padding: 30px;-->
+<!--            text-align: center;-->
+<!--        }-->
+<!--        .emotion-display {-->
+<!--            transition: all 0.3s ease;-->
+<!--            font-size: 4em;-->
+<!--            padding: 30px;-->
+<!--            border-radius: 15px;-->
+<!--            margin: 20px 0;-->
+<!--            background: #f8f9fa;-->
+<!--        }-->
+<!--        #emotionText {-->
+<!--            font-size: 1.2em;-->
+<!--            color: #666;-->
+<!--            margin-bottom: 10px;-->
+<!--        }-->
+<!--        #gsrValue {-->
+<!--            font-size: 1.1em;-->
+<!--            color: #888;-->
+<!--        }-->
+
+<!--&lt;!&ndash;        .history-panel {&ndash;&gt;-->
+<!--&lt;!&ndash;            margin-top: 30px;&ndash;&gt;-->
+<!--&lt;!&ndash;            background: white;&ndash;&gt;-->
+<!--&lt;!&ndash;            border-radius: 12px;&ndash;&gt;-->
+<!--&lt;!&ndash;            padding: 20px;&ndash;&gt;-->
+<!--&lt;!&ndash;            box-shadow: 0 4px 6px rgba(0,0,0,0.1);&ndash;&gt;-->
+<!--&lt;!&ndash;        }&ndash;&gt;-->
+
+<!--        .history-panel {-->
+<!--            background: white;-->
+<!--            border-radius: 12px;-->
+<!--            padding: 20px;-->
+<!--            box-shadow: 0 4px 6px rgba(0,0,0,0.1);-->
+<!--        }-->
+<!--        #historyTable {-->
+<!--            width: 100%;-->
+<!--            border-collapse: collapse;-->
+<!--            margin-top: 15px;-->
+<!--        }-->
+
+<!--        #historyTable th,-->
+<!--        #historyTable td {-->
+<!--            padding: 12px;-->
+<!--            text-align: left;-->
+<!--            border-bottom: 1px solid #ddd;-->
+<!--        }-->
+
+<!--        #historyTable th {-->
+<!--            background-color: #f8f9fa;-->
+<!--        }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+<!--    <h1>皮肤电信号情绪实时监测</h1>-->
+<!--    <div class="dashboard">-->
+<!--        <div id="gsrChart">-->
+<!--            <canvas id="chart"></canvas>-->
+<!--        </div>-->
+<!--        <div class="emotion-panel">-->
+<!--            <div class="emotion-display" id="emotionDisplay">⏳</div>-->
+<!--            <div id="emotionText">当前情绪: 等待数据...</div>-->
+<!--            <div id="gsrValue">最新GSR值: -</div>-->
+<!--        </div>-->
+<!--    </div>-->
+
+<!--    <div class="history-panel">-->
+<!--        <h2>情绪历史记录</h2>-->
+<!--        <table id="historyTable">-->
+<!--            <thead>-->
+<!--                <tr>-->
+<!--                    <th>ID</th>-->
+<!--                    <th>开始时间</th>-->
+<!--                    <th>结束时间</th>-->
+<!--                    <th>情绪状态</th>-->
+<!--                </tr>-->
+<!--            </thead>-->
+<!--            <tbody>-->
+<!--                &lt;!&ndash; 数据将通过JavaScript动态加载 &ndash;&gt;-->
+<!--            </tbody>-->
+<!--        </table>-->
+<!--    </div>-->
+
+<!--    <script>-->
+<!--        // 初始化图表-->
+<!--        const ctx = document.getElementById('chart').getContext('2d');-->
+<!--        const chart = new Chart(ctx, {-->
+<!--            type: 'line',-->
+<!--            data: {-->
+<!--                labels: [],-->
+<!--                datasets: [{-->
+<!--                    label: 'GSR信号',-->
+<!--                    data: [],-->
+<!--                    borderColor: '#2196F3',-->
+<!--                    backgroundColor: 'rgba(33, 150, 243, 0.05)',-->
+<!--                    borderWidth: 1.5,-->
+<!--                    pointRadius: 0,-->
+<!--                    fill: true-->
+<!--                }]-->
+<!--            },-->
+<!--            options: {-->
+<!--                responsive: true,-->
+<!--                maintainAspectRatio: false,-->
+<!--                animation: false,-->
+<!--                scales: {-->
+<!--                    x: {-->
+<!--                        type: 'linear',-->
+<!--                        title: { display: true, text: '采样点' },-->
+<!--                        grid: { display: false }-->
+<!--                    },-->
+<!--                    y: {-->
+<!--                        title: { display: true, text: 'GSR值' },-->
+<!--                        grid: { color: '#eee' },-->
+<!--                        grace: '30%'-->
+<!--                    }-->
+<!--                }-->
+<!--            }-->
+<!--        });-->
+
+<!--        // 连接WebSocket-->
+<!--        //const socket = io();-->
+<!--        const socket = io('http://localhost:5001', {-->
+<!--            transports: ['websocket'],  // 仅使用WebSocket-->
+<!--            //reconnection: false         // 禁用自动重连（调试用）-->
+<!--        });-->
+
+<!--        socket.on('connect', () => {-->
+<!--            console.log("✅ 已连接到服务器");-->
+<!--        });-->
+
+<!--        // 添加连接错误监听（调试用）-->
+<!--        socket.on('connect_error', (error) => {-->
+<!--            console.error('❌ 连接错误:', error.message);-->
+<!--        });-->
+
+<!--        socket.on('update', (data) => {-->
+<!--            console.log("📡 收到数据:", data);-->
+
+<!--            // 更新图表-->
+<!--            chart.data.labels = data.buffer.map((_, index) => index);-->
+<!--            chart.data.datasets[0].data = data.buffer;-->
+
+<!--            // 自动调整Y轴-->
+<!--            const visibleData = data.buffer.slice(-50);-->
+<!--            const minVal = Math.min(...visibleData);-->
+<!--            const maxVal = Math.max(...visibleData);-->
+<!--            const range = maxVal - minVal;-->
+<!--            const margin = Math.max(range * 0.3, 30);-->
+
+<!--            chart.options.scales.y.min = minVal - margin;-->
+<!--            chart.options.scales.y.max = maxVal + margin;-->
+
+<!--            chart.update();-->
+
+<!--            // 更新情绪显示-->
+<!--            document.getElementById('emotionDisplay').textContent = data.emotion.emoji;-->
+<!--            document.getElementById('emotionDisplay').style.backgroundColor = data.emotion.color;-->
+<!--            document.getElementById('emotionText').textContent = `当前情绪: ${data.emotion.text}`;-->
+<!--            document.getElementById('gsrValue').textContent = `最新GSR值: ${data.gsr}`;-->
+<!--        });-->
+
+<!--        socket.on('error', (msg) => {-->
+<!--            console.error("❌ 错误:", msg);-->
+<!--            alert(msg.message);-->
+<!--        });-->
+
+<!--        // 修改后的加载历史记录函数-->
+<!--        function loadHistory() {-->
+<!--            fetch('/get_records')-->
+<!--                .then(response => response.json())-->
+<!--                .then(data => {-->
+<!--                    console.log("✅ 接收到的数据:", data);-->
+<!--                    const tbody = document.querySelector('#historyTable tbody');-->
+<!--                    tbody.innerHTML = data.map(record => `-->
+<!--                        <tr>-->
+<!--                            <td>${record.id}</td>-->
+<!--                            <td>${record.start}</td>-->
+<!--                            <td>${record.end}</td>-->
+<!--                            <td>${unescape(JSON.parse('"' + record.emotion.replace(/\"/g, '\\"') + '"'))}</td>-->
+<!--                        </tr>-->
+<!--                    `).join('');-->
+<!--                })-->
+<!--                .catch(error => console.error("❌ 加载历史记录失败:", error));-->
+<!--        }-->
+
+<!--        // 确保首次加载和定时刷新-->
+<!--        document.addEventListener('DOMContentLoaded', function() {-->
+<!--            loadHistory();-->
+<!--            setInterval(loadHistory, 3000);-->
+<!--        });-->
+<!--    </script>-->
+<!--</body>-->
+<!--</html>-->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GSR情绪实时监测</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f2f5;
+        }
+        h1 {
+            color: #1a73e8;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .dashboard {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        #gsrChart {
+            height: 60vh;
+            min-height: 400px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .emotion-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 30px;
+            text-align: center;
+        }
+        .emotion-display {
+            transition: all 0.3s ease;
+            font-size: 4em;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+            background: #f8f9fa;
+        }
+        #emotionText {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        #gsrValue {
+            font-size: 1.1em;
+            color: #888;
+        }
+<!--        .history-panel {-->
+<!--            background: white;-->
+<!--            border-radius: 12px;-->
+<!--            padding: 20px;-->
+<!--            box-shadow: 0 4px 6px rgba(0,0,0,0.1);-->
+<!--        }-->
+        .history-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: block !important; /* 强制显示 */
+            opacity: 1 !important; /* 强制不透明 */
+            height: auto !important; /* 高度自适应 */
+        }
+        #historyTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        #historyTable th,
+        #historyTable td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        #historyTable th {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>皮肤电信号情绪实时监测</h1>
+    <div class="dashboard">
+        <div id="gsrChart">
+            <canvas id="chart"></canvas>
+        </div>
+        <div class="emotion-panel">
+            <div class="emotion-display" id="emotionDisplay">⏳</div>
+            <div id="emotionText">当前情绪: 等待数据...</div>
+            <div id="gsrValue">最新GSR值: -</div>
+        </div>
+        <div class="history-panel">
+            <h2>情绪历史记录</h2>
+            <table id="historyTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>开始时间</th>
+                        <th>结束时间</th>
+                        <th>情绪状态</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // 初始化图表
+        const ctx = document.getElementById('chart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'GSR信号',
+                    data: [],
+                    borderColor: '#2196F3',
+                    backgroundColor: 'rgba(33, 150, 243, 0.05)',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: '采样点' },
+                        grid: { display: false }
+                    },
+                    y: {
+                        title: { display: true, text: 'GSR值' },
+                        grid: { color: '#eee' },
+                        grace: '30%'
+                    }
+                }
+            }
+        });
+
+        // 连接WebSocket
+        const socket = io('http://localhost:5001', {
+            transports: ['websocket']
+        });
+
+        socket.on('connect', () => {
+            console.log("✅ 已连接到服务器");
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('❌ 连接错误:', error.message);
+        });
+
+        socket.on('update', (data) => {
+            console.log("📡 收到数据:", data);
+            chart.data.labels = data.buffer.map((_, index) => index);
+            chart.data.datasets[0].data = data.buffer;
+            const visibleData = data.buffer.slice(-50);
+            const minVal = Math.min(...visibleData);
+            const maxVal = Math.max(...visibleData);
+            const range = maxVal - minVal;
+            const margin = Math.max(range * 0.3, 30);
+            chart.options.scales.y.min = minVal - margin;
+            chart.options.scales.y.max = maxVal + margin;
+            chart.update();
+            document.getElementById('emotionDisplay').textContent = data.emotion.emoji;
+            document.getElementById('emotionDisplay').style.backgroundColor = data.emotion.color;
+            document.getElementById('emotionText').textContent = `当前情绪: ${data.emotion.text}`;
+            document.getElementById('gsrValue').textContent = `最新GSR值: ${data.gsr}`;
+        });
+
+        socket.on('error', (msg) => {
+            console.error("❌ 错误:", msg);
+            alert(msg.message);
+        });
+
+        function loadHistory() {
+            fetch('/get_records')
+                .then(response => response.json())
+                .then(data => {
+                    console.log("✅ 接收到的数据:", data);
+                    const tbody = document.querySelector('#historyTable tbody');
+                    tbody.innerHTML = data.map(record => `
+                        <tr>
+                            <td>${record.id}</td>
+                            <td>${record.start}</td>
+                            <td>${record.end}</td>
+                            <td>${record.emotion}</td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(error => console.error("❌ 加载历史记录失败:", error));
+        }
+
+        // 确保首次加载和定时刷新
+        document.addEventListener('DOMContentLoaded', function() {
+            loadHistory();
+            setInterval(loadHistory, 3000);
+        });
+    </script>
+</body>
+</html>
